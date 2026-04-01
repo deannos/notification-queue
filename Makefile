@@ -1,12 +1,18 @@
-.PHONY: run build tidy clean
+.PHONY: run build tidy clean ui ui-dev
 
 BINARY=notifyq
 GOFLAGS=CGO_ENABLED=1
 
-run:
+ui:
+	cd ui && npm install && npm run build
+
+ui-dev:
+	cd ui && npm run dev
+
+run: ui
 	$(GOFLAGS) go run .
 
-build:
+build: ui
 	$(GOFLAGS) go build -ldflags="-s -w" -o $(BINARY) .
 
 tidy:
