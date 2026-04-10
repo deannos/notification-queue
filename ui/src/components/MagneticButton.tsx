@@ -1,32 +1,30 @@
-import { motion, type HTMLMotionProps } from 'framer-motion';
-import { useAntiGravity } from '../hooks/useAntiGravity';
+import { motion } from 'framer-motion';
+import { Button, type ButtonProps } from '@/components/ui/button';
+import { useAntiGravity } from '@/hooks/useAntiGravity';
+import type { MouseEvent } from 'react';
 
-interface Props extends HTMLMotionProps<'button'> {
-  variant?: 'primary' | 'outline' | 'danger';
-  size?: 'sm' | 'md';
-  block?: boolean;
+interface Props extends ButtonProps {
+  strength?: number;
 }
 
-export function MagneticButton({ variant = 'outline', size = 'md', block, className = '', children, ...rest }: Props) {
-  const { x, y, onMouseMove, onMouseLeave } = useAntiGravity(8);
-  const cls = ['btn',
-    variant === 'primary' && 'btn-primary',
-    variant === 'danger' && 'btn-danger',
-    variant === 'outline' && 'btn-outline',
-    size === 'sm' && 'btn-sm',
-    block && 'btn-block',
-    className,
-  ].filter(Boolean).join(' ');
+export function MagneticButton({ strength = 8, children, onMouseMove, onMouseLeave, ...rest }: Props) {
+  const { x, y, onMouseMove: agOnMouseMove, onMouseLeave: agOnMouseLeave } = useAntiGravity(strength);
+
   return (
-    <motion.button
-      className={cls}
-      style={{ x, y }}
-      onMouseMove={onMouseMove}
-      onMouseLeave={onMouseLeave}
-      whileTap={{ scale: 0.96 }}
-      {...rest}
-    >
-      {children}
-    </motion.button>
+    <motion.div style={{ x, y, display: 'inline-flex' }} whileTap={{ scale: 0.96 }}>
+      <Button
+        onMouseMove={(e: MouseEvent<HTMLButtonElement>) => {
+          agOnMouseMove(e as MouseEvent<HTMLElement>);
+          onMouseMove?.(e);
+        }}
+        onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => {
+          agOnMouseLeave();
+          onMouseLeave?.(e);
+        }}
+        {...rest}
+      >
+        {children}
+      </Button>
+    </motion.div>
   );
 }
