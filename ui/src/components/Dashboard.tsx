@@ -2,11 +2,24 @@ import { useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { useHealthCheck, type HealthStatus } from '../hooks/useHealthCheck';
 import type { Notification } from '../types';
 import { NotificationPanel } from './NotificationPanel';
 import { AppPanel } from './AppPanel';
 import { UserPanel } from './UserPanel';
 import { MagneticButton } from './MagneticButton';
+
+const healthLabel: Record<HealthStatus, string> = {
+  ok: 'Server healthy',
+  degraded: 'Server degraded — DB unavailable',
+  unknown: 'Checking server…',
+};
+
+const healthColor: Record<HealthStatus, string> = {
+  ok: 'var(--success)',
+  degraded: 'var(--danger)',
+  unknown: 'var(--text-dim)',
+};
 
 type Panel = 'notifications' | 'apps' | 'users';
 
@@ -23,6 +36,7 @@ export function Dashboard() {
 
   const handleIncoming = useCallback((n: Notification) => setLiveNotif(n), []);
   const wsStatus = useWebSocket(token, handleIncoming);
+  const health = useHealthCheck();
 
   const navItems: { id: Panel; label: string }[] = [
     { id: 'notifications', label: '🔔 Notifications' },
@@ -42,6 +56,14 @@ export function Dashboard() {
         </div>
         <div className="topbar-right">
           <span className="user-badge">👤 {user?.username}</span>
+          <motion.span
+            title={healthLabel[health]}
+            style={{ color: healthColor[health], fontSize: '0.78rem', fontWeight: 600 }}
+            animate={health === 'degraded' ? { opacity: [1, 0.4, 1] } : {}}
+            transition={{ duration: 1.2, repeat: Infinity }}
+          >
+            {health === 'ok' ? '● Healthy' : health === 'degraded' ? '● Degraded' : '● …'}
+          </motion.span>
           <motion.span
             className={`ws-dot ${wsStatus === 'connected' ? 'connected' : 'disconnected'}`}
             title={`WebSocket ${wsStatus}`}
