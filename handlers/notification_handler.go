@@ -15,9 +15,9 @@ import (
 )
 
 type sendNotificationRequest struct {
-	Title    string `json:"title"    binding:"required"`
-	Message  string `json:"message"  binding:"required"`
-	Priority int    `json:"priority"`
+	Title    string `json:"title"    binding:"required,max=255"`
+	Message  string `json:"message"  binding:"required,max=4096"`
+	Priority int    `json:"priority" binding:"min=0,max=10"`
 }
 
 type wsEvent struct {
@@ -77,22 +77,22 @@ func ListNotifications(database *gorm.DB) gin.HandlerFunc {
 			offset = 0
 		}
 
-		var appIDs []string
-		database.Model(&models.App{}).Where("user_id = ?", userID).Pluck("id", &appIDs)
+		var total int64
+		database.Model(&models.Notification{}).
+			Joins("App").
+			Where("apps.user_id = ?", userID).
+			Count(&total)
 
-		if len(appIDs) == 0 {
+		if total == 0 {
 			c.JSON(http.StatusOK, gin.H{"notifications": []interface{}{}, "total": 0})
 			return
 		}
 
-		var total int64
-		database.Model(&models.Notification{}).Where("app_id IN ?", appIDs).Count(&total)
-
 		var notifs []models.Notification
 		if err := database.
-			Preload("App").
-			Where("app_id IN ?", appIDs).
-			Order("created_at DESC").
+			Joins("App").
+			Where("apps.user_id = ?", userID).
+			Order("notifications.created_at DESC").
 			Limit(limit).
 			Offset(offset).
 			Find(&notifs).Error; err != nil {

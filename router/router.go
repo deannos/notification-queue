@@ -16,6 +16,12 @@ import (
 func Setup(database *gorm.DB, h *hub.Hub, cfg *config.Config) *gin.Engine {
 	r := gin.Default()
 
+	// Limit request body to 5MB globally.
+	r.Use(func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 5<<20)
+		c.Next()
+	})
+
 	// --- Static web UI ---
 	staticFS, err := fs.Sub(web.StaticFiles, "static")
 	if err != nil {
@@ -32,7 +38,7 @@ func Setup(database *gorm.DB, h *hub.Hub, cfg *config.Config) *gin.Engine {
 	})
 
 	// --- Health ---
-	r.GET("/health", handlers.HealthHandler())
+	r.GET("/health", handlers.HealthHandler(database))
 
 	// --- Auth (public) ---
 	r.POST("/auth/login", handlers.Login(database, cfg))
