@@ -7,6 +7,7 @@ import (
 	"github.com/deannos/notification-queue/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
 )
 
 var upgrader = websocket.Upgrader{
@@ -33,8 +34,12 @@ func WebSocketHandler(h *hub.Hub) gin.HandlerFunc {
 	}
 }
 
-func HealthHandler() gin.HandlerFunc {
+func HealthHandler(database *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if err := database.Raw("SELECT 1").Error; err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "degraded", "reason": "database unavailable"})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	}
 }
