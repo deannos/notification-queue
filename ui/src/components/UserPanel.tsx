@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '../api';
-import type { User } from '../types';
+import { api } from '@/api';
+import type { User } from '@/types';
 import { MagneticButton } from './MagneticButton';
 import { Modal } from './Modal';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { UserCircleIcon, Trash2Icon } from 'lucide-react';
 
 const listItem = {
   hidden: { opacity: 0, y: 18 },
@@ -44,38 +48,37 @@ export function UserPanel() {
   };
 
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <h2>Users</h2>
-        <MagneticButton size="sm" variant="primary" onClick={() => { setUsername(''); setPassword(''); setIsAdmin(false); setError(''); setShowModal(true); }}>+ New User</MagneticButton>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Users</h2>
+        <MagneticButton size="sm" onClick={() => { setUsername(''); setPassword(''); setIsAdmin(false); setError(''); setShowModal(true); }}>+ New User</MagneticButton>
       </div>
 
-      {users.length === 0 && <div className="empty-state">No users.</div>}
+      {users.length === 0 && <p className="text-center py-10 text-muted-foreground">No users.</p>}
 
       <motion.div
-        className="app-list"
+        className="space-y-2.5"
         initial="hidden"
         animate="show"
         variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
       >
         <AnimatePresence initial={false}>
           {users.map(u => (
-            <motion.div
-              key={u.id}
-              className="app-card"
-              variants={listItem}
-              exit="exit"
-              layout
-              whileHover={{ y: -2, boxShadow: '0 6px 28px rgba(108,99,255,0.12)', borderColor: 'var(--accent)' }}
-            >
-              <div className="app-icon">👤</div>
-              <div className="app-info">
-                <div className="app-name">{u.username} {u.is_admin ? '★' : ''}</div>
-                <div className="app-desc">Created: {new Date(u.created_at).toLocaleDateString()}</div>
-              </div>
-              <div className="app-actions">
-                <MagneticButton size="sm" variant="danger" onClick={() => void deleteUser(u.id)}>Delete</MagneticButton>
-              </div>
+            <motion.div key={u.id} variants={listItem} exit="exit" layout>
+              <Card className="border-border bg-card hover:border-primary/50 transition-colors">
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
+                    <UserCircleIcon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm">{u.username} {u.is_admin && <span className="text-yellow-400">★</span>}</p>
+                    <p className="text-xs text-muted-foreground">Created: {new Date(u.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <MagneticButton variant="destructive" size="sm" onClick={() => void deleteUser(u.id)}>
+                    <Trash2Icon className="w-3.5 h-3.5" />
+                  </MagneticButton>
+                </CardContent>
+              </Card>
             </motion.div>
           ))}
         </AnimatePresence>
@@ -86,22 +89,22 @@ export function UserPanel() {
         title="Create User"
         onCancel={() => setShowModal(false)}
         onConfirm={() => void createUser()}
-        confirmLabel="Create"
       >
-        <div className="field">
-          <label>Username</label>
-          <input type="text" value={username} onChange={e => setUsername(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} />
-        </div>
-        <div className="field checkbox-field">
-          <label>
-            <input type="checkbox" checked={isAdmin} onChange={e => setIsAdmin(e.target.checked)} /> Admin
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Username</Label>
+            <Input value={username} onChange={e => setUsername(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Password</Label>
+            <Input type="password" value={password} onChange={e => setPassword(e.target.value)} />
+          </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={isAdmin} onChange={e => setIsAdmin(e.target.checked)} className="rounded" />
+            Admin
           </label>
+          {error && <p className="text-destructive text-xs">{error}</p>}
         </div>
-        {error && <div className="error-msg">{error}</div>}
       </Modal>
     </div>
   );
