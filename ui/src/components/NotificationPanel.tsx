@@ -1,8 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '../api';
-import type { Notification } from '../types';
+import { api } from '@/api';
+import type { Notification } from '@/types';
 import { MagneticButton } from './MagneticButton';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { CheckIcon, Trash2Icon } from 'lucide-react';
 
 const LIMIT = 20;
 
@@ -69,76 +73,88 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
   const currentPage = Math.floor(offset / LIMIT) + 1;
   const unreadCount = notifs.filter(n => !n.read).length;
 
+  const priorityBadge = (p: number) => {
+    if (p >= 8) return <Badge variant="destructive">{p}</Badge>;
+    if (p >= 4) return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">{p}</Badge>;
+    return <Badge variant="secondary" className="text-emerald-400">{p}</Badge>;
+  };
+
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <h2>Notifications</h2>
-        <div className="panel-actions">
-          <MagneticButton size="sm" onClick={() => void markAllRead()}>Mark all read</MagneticButton>
-          <MagneticButton size="sm" variant="danger" onClick={() => void deleteAll()}>Delete all</MagneticButton>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Notifications</h2>
+        <div className="flex gap-2">
+          <MagneticButton variant="outline" size="sm" onClick={() => void markAllRead()}>Mark all read</MagneticButton>
+          <MagneticButton variant="destructive" size="sm" onClick={() => void deleteAll()}>Delete all</MagneticButton>
         </div>
       </div>
 
-      <div className="sidebar-stats" style={{ marginBottom: 16, border: 'none', paddingTop: 0, marginTop: 0 }}>
-        <div className="stat">
-          <motion.span key={`t${total}`} initial={{ scale: 1.3 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400 }}>{total}</motion.span>
-          <small>Total</small>
+      {/* Stats */}
+      <div className="flex gap-4">
+        <div className="text-center">
+          <motion.p key={`t${total}`} className="text-2xl font-bold text-primary" initial={{ scale: 1.3 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400 }}>{total}</motion.p>
+          <p className="text-xs text-muted-foreground">Total</p>
         </div>
-        <div className="stat">
-          <motion.span key={`u${unreadCount}`} initial={{ scale: 1.3 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400 }}>{unreadCount}</motion.span>
-          <small>Unread</small>
+        <div className="text-center">
+          <motion.p key={`u${unreadCount}`} className="text-2xl font-bold text-primary" initial={{ scale: 1.3 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400 }}>{unreadCount}</motion.p>
+          <p className="text-xs text-muted-foreground">Unread</p>
         </div>
       </div>
 
-      {notifs.length === 0 && <div className="empty-state">No notifications yet.</div>}
-
-      <motion.div
-        className="notif-list"
-        key={offset}
-        initial="hidden"
-        animate="show"
-        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
-      >
-        <AnimatePresence initial={false}>
-          {notifs.map(n => {
-            const pri = n.priority >= 8 ? 'high' : n.priority >= 4 ? 'mid' : 'low';
-            return (
-              <motion.div
-                key={n.id}
-                className={`notif-card${n.read ? '' : ' unread'}`}
-                variants={listItem}
-                exit="exit"
-                layout
-                whileHover={{ y: -2, boxShadow: '0 6px 28px rgba(108,99,255,0.18)', borderColor: 'var(--accent)' }}
-                transition={{ layout: { duration: 0.2 } }}
-              >
-                <div className={`notif-priority priority-${pri}`}>{n.priority}</div>
-                <div className="notif-body">
-                  <div className="notif-title">{n.title}</div>
-                  <div className="notif-message">{n.message}</div>
-                  <div className="notif-meta">
-                    <span className="notif-app-tag">{n.app?.name ?? String(n.app_id)}</span>
-                    <span>{new Date(n.created_at).toLocaleString()}</span>
-                    {n.read && <span>✓ read</span>}
-                  </div>
-                </div>
-                <div className="notif-actions">
-                  {!n.read && (
-                    <motion.button onClick={() => void markRead(n.id)} title="Mark read" whileHover={{ scale: 1.2, opacity: 1 }} style={{ opacity: 0.5 }}>✓</motion.button>
-                  )}
-                  <motion.button onClick={() => void deleteNotif(n.id)} title="Delete" whileHover={{ scale: 1.2, opacity: 1 }} style={{ opacity: 0.5 }}>🗑</motion.button>
-                </div>
+      {/* List */}
+      <ScrollArea className="h-[calc(100vh-260px)]">
+        {notifs.length === 0 && (
+          <motion.p className="text-center py-10 text-muted-foreground" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            No notifications yet.
+          </motion.p>
+        )}
+        <motion.div
+          className="space-y-2.5 pr-3"
+          key={offset}
+          initial="hidden"
+          animate="show"
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+        >
+          <AnimatePresence initial={false}>
+            {notifs.map(n => (
+              <motion.div key={n.id} variants={listItem} exit="exit" layout transition={{ layout: { duration: 0.2 } }}>
+                <Card className={`border-border bg-card hover:border-primary/50 transition-colors ${!n.read ? 'border-l-2 border-l-primary' : ''}`}>
+                  <CardContent className="p-4 flex gap-3 items-start">
+                    <div className="mt-0.5">{priorityBadge(n.priority)}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{n.title}</p>
+                      <p className="text-muted-foreground text-xs mt-0.5">{n.message}</p>
+                      <div className="flex gap-2 mt-1.5 items-center flex-wrap">
+                        <span className="bg-secondary text-primary text-xs px-1.5 py-0.5 rounded">{n.app?.name ?? String(n.app_id)}</span>
+                        <span className="text-xs text-muted-foreground">{new Date(n.created_at).toLocaleString()}</span>
+                        {n.read && <span className="text-xs text-muted-foreground">✓ read</span>}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      {!n.read && (
+                        <motion.button onClick={() => void markRead(n.id)} className="p-1 text-muted-foreground hover:text-foreground transition-colors" whileHover={{ scale: 1.2 }} title="Mark read">
+                          <CheckIcon className="w-4 h-4" />
+                        </motion.button>
+                      )}
+                      <motion.button onClick={() => void deleteNotif(n.id)} className="p-1 text-muted-foreground hover:text-destructive transition-colors" whileHover={{ scale: 1.2 }} title="Delete">
+                        <Trash2Icon className="w-4 h-4" />
+                      </motion.button>
+                    </div>
+                  </CardContent>
+                </Card>
               </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
+      </ScrollArea>
 
+      {/* Pagination */}
       {pages > 1 && (
-        <div className="pagination">
-          <MagneticButton size="sm" disabled={currentPage <= 1} onClick={() => setOffset(o => Math.max(0, o - LIMIT))}>← Prev</MagneticButton>
-          <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>Page {currentPage} of {pages}</span>
-          <MagneticButton size="sm" disabled={currentPage >= pages} onClick={() => setOffset(o => o + LIMIT)}>Next →</MagneticButton>
+        <div className="flex items-center justify-center gap-3">
+          <MagneticButton variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setOffset(o => Math.max(0, o - LIMIT))}>← Prev</MagneticButton>
+          <span className="text-sm text-muted-foreground">Page {currentPage} of {pages}</span>
+          <MagneticButton variant="outline" size="sm" disabled={currentPage >= pages} onClick={() => setOffset(o => o + LIMIT)}>Next →</MagneticButton>
         </div>
       )}
     </div>
