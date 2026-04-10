@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '../api';
-import type { App } from '../types';
+import { api } from '@/api';
+import type { App } from '@/types';
 import { MagneticButton } from './MagneticButton';
 import { Modal } from './Modal';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { KeyRoundIcon, Trash2Icon } from 'lucide-react';
 
 const listItem = {
   hidden: { opacity: 0, y: 18 },
@@ -57,42 +61,43 @@ export function AppPanel() {
   };
 
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <h2>Applications</h2>
-        <MagneticButton size="sm" variant="primary" onClick={openModal}>+ New App</MagneticButton>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Applications</h2>
+        <MagneticButton size="sm" onClick={openModal}>+ New App</MagneticButton>
       </div>
 
       {apps.length === 0 && (
-        <div className="empty-state">No applications yet. Create one to start sending notifications.</div>
+        <p className="text-center py-10 text-muted-foreground">No applications yet. Create one to start sending notifications.</p>
       )}
 
       <motion.div
-        className="app-list"
+        className="space-y-2.5"
         initial="hidden"
         animate="show"
         variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
       >
         <AnimatePresence initial={false}>
           {apps.map(a => (
-            <motion.div
-              key={a.id}
-              className="app-card"
-              variants={listItem}
-              exit="exit"
-              layout
-              whileHover={{ y: -2, boxShadow: '0 6px 28px rgba(108,99,255,0.12)', borderColor: 'var(--accent)' }}
-            >
-              <div className="app-icon">🔑</div>
-              <div className="app-info">
-                <div className="app-name">{a.name}</div>
-                <div className="app-desc">{a.description}</div>
-                <div className="app-id">ID: {a.id}</div>
-              </div>
-              <div className="app-actions">
-                <MagneticButton size="sm" onClick={() => void rotateToken(a.id)}>Rotate Token</MagneticButton>
-                <MagneticButton size="sm" variant="danger" onClick={() => void deleteApp(a.id)}>Delete</MagneticButton>
-              </div>
+            <motion.div key={a.id} variants={listItem} exit="exit" layout>
+              <Card className="border-border bg-card hover:border-primary/50 transition-colors">
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
+                    <KeyRoundIcon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm">{a.name}</p>
+                    {a.description && <p className="text-muted-foreground text-xs">{a.description}</p>}
+                    <p className="text-muted-foreground text-xs font-mono mt-0.5">ID: {a.id}</p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <MagneticButton variant="outline" size="sm" onClick={() => void rotateToken(a.id)}>Rotate Token</MagneticButton>
+                    <MagneticButton variant="destructive" size="sm" onClick={() => void deleteApp(a.id)}>
+                      <Trash2Icon className="w-3.5 h-3.5" />
+                    </MagneticButton>
+                  </div>
+                </CardContent>
+              </Card>
             </motion.div>
           ))}
         </AnimatePresence>
@@ -101,33 +106,32 @@ export function AppPanel() {
       <Modal
         open={showModal}
         title="Create Application"
-        onCancel={() => { setShowModal(false); }}
+        onCancel={() => setShowModal(false)}
         onConfirm={created ? undefined : () => void createApp()}
-        confirmLabel="Create"
         confirmDisabled={created}
       >
         {!created ? (
-          <>
-            <div className="field">
-              <label>Name</label>
-              <input type="text" placeholder="My Service" value={name} onChange={e => setName(e.target.value)} />
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input placeholder="My Service" value={name} onChange={e => setName(e.target.value)} />
             </div>
-            <div className="field">
-              <label>Description</label>
-              <input type="text" placeholder="What sends notifications here?" value={desc} onChange={e => setDesc(e.target.value)} />
+            <div className="space-y-1.5">
+              <Label>Description</Label>
+              <Input placeholder="What sends notifications here?" value={desc} onChange={e => setDesc(e.target.value)} />
             </div>
-            {error && <div className="error-msg">{error}</div>}
-          </>
+            {error && <p className="text-destructive text-xs">{error}</p>}
+          </div>
         ) : (
           <motion.div
-            className="token-box"
+            className="rounded-lg border border-primary/30 bg-secondary p-4 space-y-2"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ ease: [0.23, 1, 0.32, 1], duration: 0.4 }}
           >
-            <p><strong>Save your token — it won't be shown again:</strong></p>
-            <code>{newToken}</code>
-            <MagneticButton size="sm" onClick={() => void navigator.clipboard.writeText(newToken)}>Copy</MagneticButton>
+            <p className="text-xs text-orange-400 font-medium">Save your token — it won't be shown again:</p>
+            <code className="block text-xs font-mono text-emerald-400 break-all">{newToken}</code>
+            <MagneticButton variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(newToken)}>Copy</MagneticButton>
           </motion.div>
         )}
       </Modal>
