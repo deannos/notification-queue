@@ -40,13 +40,14 @@ func Setup(database *gorm.DB, h *hub.Hub, cfg *config.Config) *gin.Engine {
 	// --- Health ---
 	r.GET("/health", handlers.HealthHandler(database))
 
-	// --- Auth (public) ---
-	r.POST("/auth/login", handlers.Login(database, cfg))
-	r.POST("/auth/register", handlers.Register(database, cfg))
+	// --- Auth (public, 5 req/min per IP) ---
+	authLimiter := middleware.RateLimit(5.0/60, 5)
+	r.POST("/auth/login", authLimiter, handlers.Login(database, cfg))
+	r.POST("/auth/register", authLimiter, handlers.Register(database, cfg))
 
-	// --- App-token authenticated (send notifications) ---
+	// --- App-token authenticated (send notifications, 60 req/min per IP) ---
 	appAuth := r.Group("/")
-	appAuth.Use(middleware.AppTokenAuth(database))
+	appAuth.Use(middleware.AppTokenAuth(database), middleware.RateLimit(1, 60))
 	{
 		appAuth.POST("/message", handlers.SendNotification(database, h))
 	}
