@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/api';
-import type { Notification } from '@/types';
+import type { App, Notification } from '@/types';
 import { MagneticButton } from './MagneticButton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CheckIcon, Trash2Icon } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { CheckIcon, Trash2Icon, SearchIcon, XIcon } from 'lucide-react';
 
 const LIMIT = 20;
 
@@ -25,16 +26,39 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [apps, setApps] = useState<App[]>([]);
+
+  // Filters
+  const [search, setSearch] = useState('');
+  const [filterApp, setFilterApp] = useState('');
+  const [filterRead, setFilterRead] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
+
+  useEffect(() => {
+    api.get<App[]>('/api/v1/application').then(data => setApps(data ?? [])).catch(() => {});
+  }, []);
+
+  const buildQuery = useCallback((off: number) => {
+    const p = new URLSearchParams({ limit: String(LIMIT), offset: String(off) });
+    if (search)         p.set('q', search);
+    if (filterApp)      p.set('app_id', filterApp);
+    if (filterRead)     p.set('read', filterRead);
+    if (filterPriority) p.set('priority', filterPriority);
+    return `/api/v1/notification?${p.toString()}`;
+  }, [search, filterApp, filterRead, filterPriority]);
 
   const load = useCallback(async (off: number) => {
     try {
-      const data = await api.get<{ notifications: Notification[]; total: number }>(
-        `/api/v1/notification?limit=${LIMIT}&offset=${off}`
-      );
+      const data = await api.get<{ notifications: Notification[]; total: number }>(buildQuery(off));
       setNotifs(data.notifications ?? []);
       setTotal(data.total ?? 0);
     } catch { /* ignore */ }
-  }, []);
+  }, [buildQuery]);
+
+  useEffect(() => {
+    setOffset(0);
+    void load(0);
+  }, [search, filterApp, filterRead, filterPriority, load]);
 
   useEffect(() => { void load(offset); }, [offset, load]);
 
@@ -69,6 +93,11 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
     setOffset(0);
   };
 
+  const clearFilters = () => {
+    setSearch(''); setFilterApp(''); setFilterRead(''); setFilterPriority('');
+  };
+  const hasFilters = search || filterApp || filterRead || filterPriority;
+
   const pages = Math.ceil(total / LIMIT);
   const currentPage = Math.floor(offset / LIMIT) + 1;
   const unreadCount = notifs.filter(n => !n.read).length;
@@ -80,7 +109,7 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -96,16 +125,63 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
         </div>
       </div>
 
+      {/* Filter bar */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-[160px]">
+          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search…"
+            className="pl-8 h-8 text-sm bg-secondary border-0"
+          />
+        </div>
+        <select
+          value={filterApp}
+          onChange={e => setFilterApp(e.target.value)}
+          className="h-8 px-2 text-xs rounded-md bg-secondary text-foreground border-0 cursor-pointer"
+        >
+          <option value="">All apps</option>
+          {apps.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <select
+          value={filterRead}
+          onChange={e => setFilterRead(e.target.value)}
+          className="h-8 px-2 text-xs rounded-md bg-secondary text-foreground border-0 cursor-pointer"
+        >
+          <option value="">All</option>
+          <option value="false">Unread</option>
+          <option value="true">Read</option>
+        </select>
+        <select
+          value={filterPriority}
+          onChange={e => setFilterPriority(e.target.value)}
+          className="h-8 px-2 text-xs rounded-md bg-secondary text-foreground border-0 cursor-pointer"
+        >
+          <option value="">Any priority</option>
+          {[...Array(11).keys()].map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        {hasFilters && (
+          <motion.button
+            onClick={clearFilters}
+            className="h-8 px-2 text-xs rounded-md text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+          >
+            <XIcon className="w-3 h-3" /> Clear
+          </motion.button>
+        )}
+      </div>
+
       {/* List */}
-      <ScrollArea className="h-[calc(100vh-200px)]">
+      <ScrollArea className="h-[calc(100vh-280px)]">
         {notifs.length === 0 && (
           <motion.p className="text-center py-16 text-muted-foreground text-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            No notifications yet.
+            {hasFilters ? 'No notifications match your filters.' : 'No notifications yet.'}
           </motion.p>
         )}
         <motion.div
           className="space-y-2 pr-3"
-          key={offset}
+          key={`${offset}-${search}-${filterApp}-${filterRead}-${filterPriority}`}
           initial="hidden"
           animate="show"
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}

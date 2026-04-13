@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useHealthCheck, type HealthStatus } from '@/hooks/useHealthCheck';
 import type { Notification } from '@/types';
@@ -9,6 +10,7 @@ import { AppPanel } from './AppPanel';
 import { UserPanel } from './UserPanel';
 import { MagneticButton } from './MagneticButton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { SunIcon, MoonIcon } from 'lucide-react';
 
 type Panel = 'notifications' | 'apps' | 'users';
 
@@ -32,6 +34,7 @@ const navLabels: Record<Panel, string> = {
 
 export function Dashboard() {
   const { user, token, logout } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [panel, setPanel] = useState<Panel>('notifications');
   const [liveNotif, setLiveNotif] = useState<Notification | null>(null);
 
@@ -50,7 +53,7 @@ export function Dashboard() {
       <div className="flex flex-col h-screen bg-background text-foreground antialiased">
 
         {/* ── Topbar ── */}
-        <header className="flex items-center gap-6 px-6 h-[52px] bg-card/60 border-b border-border backdrop-blur-md sticky top-0 z-50 shrink-0">
+        <header className="flex items-center gap-2 sm:gap-6 px-3 sm:px-6 h-[52px] bg-card/60 border-b border-border backdrop-blur-md sticky top-0 z-50 shrink-0">
 
           {/* Brand */}
           <div className="flex items-center gap-2 shrink-0">
@@ -63,12 +66,12 @@ export function Dashboard() {
           </div>
 
           {/* Tab navigation */}
-          <nav className="flex items-center gap-0.5">
+          <nav className="flex items-center gap-0.5 overflow-x-auto">
             {navItems.map(id => (
               <motion.button
                 key={id}
                 onClick={() => setPanel(id)}
-                className={`relative px-3 py-1.5 text-sm rounded-md transition-colors duration-150 ${
+                className={`relative px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm rounded-md transition-colors duration-150 whitespace-nowrap ${
                   panel === id
                     ? 'text-foreground font-medium'
                     : 'text-muted-foreground hover:text-foreground'
@@ -131,6 +134,15 @@ export function Dashboard() {
               <span className="hidden sm:inline">{user?.username}</span>
             </div>
 
+            <motion.button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              whileTap={{ scale: 0.9 }}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <SunIcon className="w-3.5 h-3.5" /> : <MoonIcon className="w-3.5 h-3.5" />}
+            </motion.button>
+
             <MagneticButton variant="ghost" size="sm" onClick={logout}
               className="text-muted-foreground hover:text-foreground text-xs px-2.5"
             >
@@ -141,7 +153,7 @@ export function Dashboard() {
 
         {/* ── Main content ── */}
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-5xl mx-auto px-6 py-8">
+          <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
             <AnimatePresence mode="wait">
               {panel === 'notifications' && (
                 <motion.div key="notifications" {...panelVariants}>

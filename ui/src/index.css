@@ -26,6 +26,26 @@
     --warning: 38 90% 55%;             /* amber warning */
     --radius: 0.75rem;
   }
+
+  /* ── Light mode overrides ── */
+  .light {
+    --background: 40 30% 97%;
+    --foreground: 240 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --border: 240 5% 88%;
+    --input: 240 5% 88%;
+    --primary: 38 72% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 94%;
+    --secondary-foreground: 240 10% 10%;
+    --muted: 240 5% 94%;
+    --muted-foreground: 240 5% 45%;
+    --accent: 240 5% 90%;
+    --accent-foreground: 240 10% 10%;
+    --destructive: 358 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+  }
 }
 
 @layer base {
@@ -39,6 +59,12 @@
 }
 .card-glow-amber {
   box-shadow: 0 0 0 1px hsl(38 72% 50% / 0.25), 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 hsl(38 72% 50% / 0.1);
+}
+.light .card-glow {
+  box-shadow: 0 0 0 1px hsl(240 5% 88%), 0 4px 16px rgba(0,0,0,0.08);
+}
+.light .card-glow-amber {
+  box-shadow: 0 0 0 1px hsl(38 72% 42% / 0.3), 0 4px 16px rgba(0,0,0,0.08), inset 0 1px 0 hsl(38 72% 42% / 0.1);
 }
 
 /* ── Scrollbar ── */
