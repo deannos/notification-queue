@@ -14,6 +14,7 @@ type Config struct {
 	AllowRegistration      bool
 	JWTExpiryHours         int
 	RetentionDays          int // 0 = disabled
+	AllowedOrigins         string // comma-separated, "*" = allow all
 }
 
 func Load() *Config {
@@ -26,6 +27,7 @@ func Load() *Config {
 		AllowRegistration: getBoolEnv("ALLOW_REGISTRATION", true),
 		JWTExpiryHours:    getIntEnv("JWT_EXPIRY_HOURS", 24),
 		RetentionDays:     getIntEnv("RETENTION_DAYS", 30),
+		AllowedOrigins:    getEnv("ALLOWED_ORIGINS", "*"),
 	}
 }
 

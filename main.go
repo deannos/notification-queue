@@ -35,13 +35,15 @@ func main() {
 	h := hub.New()
 	go h.Run()
 
+	tickets := hub.NewTicketStore()
+
 	retentionCtx, retentionCancel := context.WithCancel(context.Background())
 	defer retentionCancel()
 	db.StartRetentionWorker(retentionCtx, database, cfg.RetentionDays)
 
 	srv := &http.Server{
 		Addr:    cfg.ListenAddr,
-		Handler: router.Setup(database, h, cfg),
+		Handler: router.Setup(database, h, tickets, cfg),
 	}
 
 	go func() {

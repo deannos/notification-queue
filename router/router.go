@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func Setup(database *gorm.DB, h *hub.Hub, cfg *config.Config) *gin.Engine {
+func Setup(database *gorm.DB, h *hub.Hub, tickets *hub.TicketStore, cfg *config.Config) *gin.Engine {
 	r := gin.Default()
 
 	// Limit request body to 5MB globally.
@@ -52,13 +52,16 @@ func Setup(database *gorm.DB, h *hub.Hub, cfg *config.Config) *gin.Engine {
 		appAuth.POST("/message", handlers.SendNotification(database, h))
 	}
 
-	// --- WebSocket (JWT via query param) ---
-	r.GET("/ws", middleware.WSJWTAuth(cfg), handlers.WebSocketHandler(h))
+	// --- WebSocket (ticket preferred, JWT fallback via ?token=) ---
+	r.GET("/ws", middleware.WSJWTAuth(cfg), handlers.WebSocketHandler(h, tickets, cfg))
 
 	// --- User-authenticated API ---
 	api := r.Group("/api/v1")
 	api.Use(middleware.JWTAuth(cfg))
 	{
+		// WS ticket
+		api.GET("/ws/ticket", handlers.IssueWSTicket(tickets))
+
 		// Notifications
 		api.GET("/notification", handlers.ListNotifications(database))
 		api.GET("/notification/:id", handlers.GetNotification(database))
