@@ -15,11 +15,13 @@ import (
 type createAppRequest struct {
 	Name        string `json:"name"        binding:"required,min=1,max=100"`
 	Description string `json:"description" binding:"max=255"`
+	WebhookURL  string `json:"webhook_url" binding:"omitempty,url,max=500"`
 }
 
 type updateAppRequest struct {
 	Name        string `json:"name"        binding:"max=100"`
 	Description string `json:"description" binding:"max=255"`
+	WebhookURL  string `json:"webhook_url" binding:"omitempty,url,max=500"`
 }
 
 func ListApps(database *gorm.DB) gin.HandlerFunc {
@@ -50,7 +52,7 @@ func CreateApp(database *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		token, err := auth.GenerateAppToken()
+		plainToken, err := auth.GenerateAppToken()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 			return
@@ -61,7 +63,10 @@ func CreateApp(database *gorm.DB) gin.HandlerFunc {
 			UserID:      userID,
 			Name:        req.Name,
 			Description: req.Description,
-			Token:       token,
+			WebhookURL:  req.WebhookURL,
+			TokenPrefix: auth.TokenPrefix(plainToken),
+			TokenHash:   auth.HashToken(plainToken),
+			Token:       plainToken, // returned once; not stored
 			CreatedAt:   time.Now(),
 		}
 
@@ -98,6 +103,9 @@ func UpdateApp(database *gorm.DB) gin.HandlerFunc {
 		}
 		if req.Description != "" {
 			updates["description"] = req.Description
+		}
+		if req.WebhookURL != "" {
+			updates["webhook_url"] = req.WebhookURL
 		}
 
 		if err := database.Model(&app).Updates(updates).Error; err != nil {
@@ -144,18 +152,21 @@ func RotateToken(database *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		token, err := auth.GenerateAppToken()
+		plainToken, err := auth.GenerateAppToken()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 			return
 		}
 
-		if err := database.Model(&app).Update("token", token).Error; err != nil {
+		updates := map[string]interface{}{
+			"token":        auth.HashToken(plainToken),
+			"token_prefix": auth.TokenPrefix(plainToken),
+		}
+		if err := database.Model(&app).Updates(updates).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate token"})
 			return
 		}
 
-		app.Token = token
-		c.JSON(http.StatusOK, gin.H{"token": app.Token, "app_id": app.ID})
+		c.JSON(http.StatusOK, gin.H{"token": plainToken, "app_id": app.ID})
 	}
 }
