@@ -2,10 +2,11 @@ package db
 
 import (
 	"context"
-	"log"
 	"time"
 
+	"github.com/deannos/notification-queue/logger"
 	"github.com/deannos/notification-queue/models"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -21,9 +22,12 @@ func StartRetentionWorker(ctx context.Context, database *gorm.DB, retentionDays 
 			cutoff := time.Now().AddDate(0, 0, -retentionDays)
 			result := database.Unscoped().Where("created_at < ?", cutoff).Delete(&models.Notification{})
 			if result.Error != nil {
-				log.Printf("retention: cleanup error: %v", result.Error)
+				logger.L.Error("retention cleanup error", zap.Error(result.Error))
 			} else if result.RowsAffected > 0 {
-				log.Printf("retention: deleted %d notifications older than %d days", result.RowsAffected, retentionDays)
+				logger.L.Info("retention purged notifications",
+					zap.Int64("deleted", result.RowsAffected),
+					zap.Int("older_than_days", retentionDays),
+				)
 			}
 		}
 

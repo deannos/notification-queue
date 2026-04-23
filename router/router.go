@@ -14,7 +14,8 @@ import (
 )
 
 func Setup(database *gorm.DB, h *hub.Hub, tickets *hub.TicketStore, cfg *config.Config) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery(), middleware.RequestID(), middleware.ZapLogger())
 
 	// Limit request body to 5MB globally.
 	r.Use(func(c *gin.Context) {

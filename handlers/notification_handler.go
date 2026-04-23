@@ -3,16 +3,17 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/deannos/notification-queue/hub"
+	"github.com/deannos/notification-queue/logger"
 	"github.com/deannos/notification-queue/middleware"
 	"github.com/deannos/notification-queue/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -74,19 +75,22 @@ func fireWebhook(url string, notif *models.Notification) {
 	body, _ := json.Marshal(notif)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		log.Printf("webhook: build request error: %v", err)
+		logger.L.Error("webhook build request failed", zap.String("url", url), zap.Error(err))
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("webhook: delivery error for %s: %v", url, err)
+		logger.L.Warn("webhook delivery failed", zap.String("url", url), zap.Error(err))
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		log.Printf("webhook: non-2xx response %d from %s", resp.StatusCode, url)
+		logger.L.Warn("webhook non-2xx response",
+			zap.String("url", url),
+			zap.Int("status", resp.StatusCode),
+		)
 	}
 }
 

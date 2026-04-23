@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"errors"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,23 +13,29 @@ import (
 	"github.com/deannos/notification-queue/db"
 	"github.com/deannos/notification-queue/handlers"
 	"github.com/deannos/notification-queue/hub"
+	"github.com/deannos/notification-queue/logger"
 	"github.com/deannos/notification-queue/router"
+	"go.uber.org/zap"
 )
 
 func main() {
 	cfg := config.Load()
 
+	logger.Init(cfg.Env == "development")
+	defer logger.Sync()
+	log := logger.L
+
 	database, err := db.Open(cfg.DatabasePath)
 	if err != nil {
-		log.Fatalf("failed to open database: %v", err)
+		log.Fatal("failed to open database", zap.Error(err))
 	}
 
 	if err := db.Migrate(database); err != nil {
-		log.Fatalf("migration failed: %v", err)
+		log.Fatal("migration failed", zap.Error(err))
 	}
 
 	if err := handlers.EnsureAdminUser(database, cfg.DefaultAdminUser, cfg.DefaultAdminPass); err != nil {
-		log.Fatalf("failed to ensure admin user: %v", err)
+		log.Fatal("failed to ensure admin user", zap.Error(err))
 	}
 
 	h := hub.New()
@@ -47,27 +53,27 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("NotifyQ listening on %s", cfg.ListenAddr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+		log.Info("NotifyQ listening", zap.String("addr", cfg.ListenAddr), zap.String("env", cfg.Env))
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal("server error", zap.Error(err))
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("shutting down...")
+	log.Info("shutting down...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("forced shutdown: %v", err)
+		log.Error("forced shutdown", zap.Error(err))
 	}
 
 	if sqlDB, err := database.DB(); err == nil {
-		sqlDB.Close()
+		_ = sqlDB.Close()
 	}
 
-	log.Println("shutdown complete")
+	log.Info("shutdown complete")
 }
