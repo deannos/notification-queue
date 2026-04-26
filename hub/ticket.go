@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"sync"
@@ -19,9 +20,10 @@ type TicketStore struct {
 	tickets map[string]ticketEntry
 }
 
-func NewTicketStore() *TicketStore {
+// NewTicketStore creates a TicketStore whose cleanup goroutine stops when ctx is cancelled.
+func NewTicketStore(ctx context.Context) *TicketStore {
 	ts := &TicketStore{tickets: make(map[string]ticketEntry)}
-	go ts.cleanupLoop()
+	go ts.cleanupLoop(ctx)
 	return ts
 }
 
@@ -49,14 +51,22 @@ func (ts *TicketStore) Consume(ticket string) (string, bool) {
 	return e.userID, true
 }
 
-func (ts *TicketStore) cleanupLoop() {
-	for range time.Tick(time.Minute) {
-		ts.mu.Lock()
-		for k, v := range ts.tickets {
-			if time.Now().After(v.expiresAt) {
-				delete(ts.tickets, k)
+func (ts *TicketStore) cleanupLoop(ctx context.Context) {
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			now := time.Now()
+			ts.mu.Lock()
+			for k, v := range ts.tickets {
+				if now.After(v.expiresAt) {
+					delete(ts.tickets, k)
+				}
 			}
+			ts.mu.Unlock()
 		}
-		ts.mu.Unlock()
 	}
 }
