@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"io/fs"
 	"net/http"
 
@@ -8,16 +9,24 @@ import (
 	"github.com/deannos/notification-queue/handlers"
 	"github.com/deannos/notification-queue/hub"
 	"github.com/deannos/notification-queue/middleware"
+	"github.com/deannos/notification-queue/storage"
 	"github.com/deannos/notification-queue/web"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
-func Setup(database *gorm.DB, h *hub.Hub, tickets *hub.TicketStore, cfg *config.Config) *gin.Engine {
+func Setup(
+	ctx context.Context,
+	users storage.UserRepository,
+	apps storage.AppRepository,
+	notifs storage.NotificationRepository,
+	pub storage.NotificationPublisher,
+	h *hub.Hub,
+	tickets *hub.TicketStore,
+	cfg *config.Config,
+) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.RequestID(), middleware.ZapLogger())
 
-	// Limit request body to 5MB globally.
 	r.Use(func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 5<<20)
 		c.Next()
@@ -39,52 +48,48 @@ func Setup(database *gorm.DB, h *hub.Hub, tickets *hub.TicketStore, cfg *config.
 	})
 
 	// --- Health ---
-	r.GET("/health", handlers.HealthHandler(database))
+	r.GET("/health", handlers.HealthHandler(notifs))
 
 	// --- Auth (public, 5 req/min per IP) ---
-	authLimiter := middleware.RateLimit(5.0/60, 5)
-	r.POST("/auth/login", authLimiter, handlers.Login(database, cfg))
-	r.POST("/auth/register", authLimiter, handlers.Register(database, cfg))
+	authLimiter := middleware.RateLimit(ctx, 5.0/60, 5)
+	r.POST("/auth/login", authLimiter, handlers.Login(users, cfg))
+	r.POST("/auth/register", authLimiter, handlers.Register(users, cfg))
 
-	// --- App-token authenticated (send notifications, 60 req/min per IP) ---
+	// --- App-token authenticated ---
 	appAuth := r.Group("/")
-	appAuth.Use(middleware.AppTokenAuth(database), middleware.RateLimit(1, 60))
+	appAuth.Use(middleware.AppTokenAuth(apps), middleware.RateLimit(ctx, 1, 60))
 	{
-		appAuth.POST("/message", handlers.SendNotification(database, h))
+		appAuth.POST("/message", handlers.SendNotification(notifs, pub))
 	}
 
-	// --- WebSocket (ticket preferred, JWT fallback via ?token=) ---
+	// --- WebSocket ---
 	r.GET("/ws", middleware.WSJWTAuth(cfg), handlers.WebSocketHandler(h, tickets, cfg))
 
 	// --- User-authenticated API ---
 	api := r.Group("/api/v1")
 	api.Use(middleware.JWTAuth(cfg))
 	{
-		// WS ticket
 		api.GET("/ws/ticket", handlers.IssueWSTicket(tickets))
 
-		// Notifications
-		api.GET("/notification", handlers.ListNotifications(database))
-		api.GET("/notification/:id", handlers.GetNotification(database))
-		api.PUT("/notification/:id/read", handlers.MarkRead(database))
-		api.DELETE("/notification/:id", handlers.DeleteNotification(database))
-		api.DELETE("/notification", handlers.DeleteAllNotifications(database))
+		api.GET("/notification", handlers.ListNotifications(notifs))
+		api.GET("/notification/:id", handlers.GetNotification(notifs))
+		api.PUT("/notification/:id/read", handlers.MarkRead(notifs))
+		api.DELETE("/notification/:id", handlers.DeleteNotification(notifs))
+		api.DELETE("/notification", handlers.DeleteAllNotifications(apps, notifs))
 
-		// Applications
-		api.GET("/application", handlers.ListApps(database))
-		api.POST("/application", handlers.CreateApp(database))
-		api.PUT("/application/:id", handlers.UpdateApp(database))
-		api.DELETE("/application/:id", handlers.DeleteApp(database))
-		api.POST("/application/:id/token", handlers.RotateToken(database))
+		api.GET("/application", handlers.ListApps(apps))
+		api.POST("/application", handlers.CreateApp(apps))
+		api.PUT("/application/:id", handlers.UpdateApp(apps))
+		api.DELETE("/application/:id", handlers.DeleteApp(apps))
+		api.POST("/application/:id/token", handlers.RotateToken(apps))
 
-		// Admin only
 		admin := api.Group("/")
 		admin.Use(middleware.AdminOnly())
 		{
-			admin.GET("/user", handlers.ListUsers(database))
-			admin.POST("/user", handlers.CreateUser(database, cfg))
-			admin.DELETE("/user/:id", handlers.DeleteUser(database))
-			admin.PUT("/user/:id/password", handlers.ChangePassword(database))
+			admin.GET("/user", handlers.ListUsers(users))
+			admin.POST("/user", handlers.CreateUser(users, cfg))
+			admin.DELETE("/user/:id", handlers.DeleteUser(users))
+			admin.PUT("/user/:id/password", handlers.ChangePassword(users))
 		}
 	}
 
