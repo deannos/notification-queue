@@ -25,6 +25,7 @@
   - [WebSocket Stream](#websocket-stream)
 - [Project Structure](#project-structure)
 - [Documentation](#documentation)
+- [Wiki](#wiki)
 - [Development](#development)
 - [Contributing](#contributing)
 - [Security](#security)
@@ -321,6 +322,22 @@ ws.onmessage = (e) => {
 | -------- | ----------- |
 | [docs/architecture.md](docs/architecture.md) | Full architecture reference: package responsibilities, data models, request lifecycle, authentication model, WebSocket design, concurrency model, storage layer (port/adapter pattern), design decisions, known limitations, and the phased roadmap to v2 (service layer → Postgres → Redis → Kafka). |
 | [docs/enhancementv1.md](docs/enhancementv1.md) | Issue-level improvement catalogue: ten concrete problems in the current codebase (missing repository pattern, no DI, goroutine leaks, missing context propagation, non-atomic deletes, etc.) with before/after code examples and a prioritized implementation plan. |
+
+---
+
+## Wiki
+
+Extended documentation is maintained on the [GitHub Wiki](https://github.com/deannos/notification-queue/wiki).
+
+| Page | Description |
+| ---- | ----------- |
+| [Home](https://github.com/deannos/notification-queue/wiki/Home) | Project overview and navigation index |
+| [Installation](https://github.com/deannos/notification-queue/wiki/Installation) | Detailed setup for local, Docker, and Docker Compose environments |
+| [Configuration](https://github.com/deannos/notification-queue/wiki/Configuration) | Full environment variable reference with examples and production patterns |
+| [API Reference](https://github.com/deannos/notification-queue/wiki/API-Reference) | Complete endpoint docs with request/response schemas and error codes |
+| [Deployment](https://github.com/deannos/notification-queue/wiki/Deployment) | Production hardening, reverse proxy setup, Docker Compose, and Kubernetes |
+| [Development Guide](https://github.com/deannos/notification-queue/wiki/Development-Guide) | Local dev setup, project conventions, and contribution workflow |
+| [Roadmap](https://github.com/deannos/notification-queue/wiki/Roadmap) | Phased roadmap from SQLite monolith to distributed Kafka/Postgres/Redis stack |
 
 ---
 
