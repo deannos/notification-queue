@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -16,6 +17,17 @@ type Config struct {
 	RetentionDays          int    // 0 = disabled
 	AllowedOrigins         string // comma-separated, "*" = allow all
 	Env                    string // "development" | "production"
+}
+
+// Validate returns an error if the config is unsafe for the current environment.
+func (c *Config) Validate() error {
+	if c.Env == "production" && c.JWTSecret == "change-me-in-production-please" {
+		return fmt.Errorf("JWT_SECRET must be set in production")
+	}
+	if c.ListenAddr == "" {
+		return fmt.Errorf("LISTEN_ADDR must not be empty")
+	}
+	return nil
 }
 
 func Load() *Config {
