@@ -7,9 +7,9 @@ import (
 	"github.com/deannos/notification-queue/config"
 	"github.com/deannos/notification-queue/hub"
 	"github.com/deannos/notification-queue/middleware"
+	"github.com/deannos/notification-queue/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"gorm.io/gorm"
 )
 
 func newUpgrader(cfg *config.Config) websocket.Upgrader {
@@ -36,7 +36,6 @@ func newUpgrader(cfg *config.Config) websocket.Upgrader {
 func WebSocketHandler(h *hub.Hub, tickets *hub.TicketStore, cfg *config.Config) gin.HandlerFunc {
 	upgrader := newUpgrader(cfg)
 	return func(c *gin.Context) {
-		// Prefer short-lived ticket over JWT-in-URL.
 		var userID string
 		if ticket := c.Query("ticket"); ticket != "" {
 			id, ok := tickets.Consume(ticket)
@@ -46,7 +45,6 @@ func WebSocketHandler(h *hub.Hub, tickets *hub.TicketStore, cfg *config.Config) 
 			}
 			userID = id
 		} else {
-			// Fallback: JWT from ?token= (existing clients)
 			userID = c.GetString(middleware.CtxUserID)
 		}
 
@@ -61,7 +59,6 @@ func WebSocketHandler(h *hub.Hub, tickets *hub.TicketStore, cfg *config.Config) 
 	}
 }
 
-// IssueWSTicket exchanges a valid JWT for a 30-second WS ticket.
 func IssueWSTicket(tickets *hub.TicketStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetString(middleware.CtxUserID)
@@ -74,9 +71,9 @@ func IssueWSTicket(tickets *hub.TicketStore) gin.HandlerFunc {
 	}
 }
 
-func HealthHandler(database *gorm.DB) gin.HandlerFunc {
+func HealthHandler(notifs storage.NotificationRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if err := database.Raw("SELECT 1").Error; err != nil {
+		if err := notifs.Ping(c.Request.Context()); err != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "degraded", "reason": "database unavailable"})
 			return
 		}
