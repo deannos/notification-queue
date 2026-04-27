@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/deannos/notification-queue/auth"
 	"github.com/deannos/notification-queue/config"
 	"github.com/deannos/notification-queue/hub"
 	"github.com/deannos/notification-queue/middleware"
@@ -33,19 +34,15 @@ func newUpgrader(cfg *config.Config) websocket.Upgrader {
 	}
 }
 
+// WebSocketHandler handles WebSocket upgrades. Authentication is resolved here
+// because the route no longer carries WSJWTAuth middleware — ticket-based auth
+// must bypass the JWT check entirely.
 func WebSocketHandler(h *hub.Hub, tickets *hub.TicketStore, cfg *config.Config) gin.HandlerFunc {
 	upgrader := newUpgrader(cfg)
 	return func(c *gin.Context) {
-		var userID string
-		if ticket := c.Query("ticket"); ticket != "" {
-			id, ok := tickets.Consume(ticket)
-			if !ok {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired ticket"})
-				return
-			}
-			userID = id
-		} else {
-			userID = c.GetString(middleware.CtxUserID)
+		userID, ok := resolveWSUser(c, tickets, cfg)
+		if !ok {
+			return
 		}
 
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -57,6 +54,44 @@ func WebSocketHandler(h *hub.Hub, tickets *hub.TicketStore, cfg *config.Config) 
 		go client.WritePump()
 		client.ReadPump()
 	}
+}
+
+// resolveWSUser authenticates a WebSocket request via one-time ticket or JWT.
+// Returns the userID and true on success; writes an error response and returns
+// false on failure.
+func resolveWSUser(c *gin.Context, tickets *hub.TicketStore, cfg *config.Config) (string, bool) {
+	if ticket := c.Query("ticket"); ticket != "" {
+		id, ok := tickets.Consume(ticket)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired ticket"})
+			return "", false
+		}
+		return id, true
+	}
+
+	// Fall back to JWT — accept ?token= (WebSocket) or Authorization: Bearer.
+	token := c.Query("token")
+	if token == "" {
+		header := c.GetHeader("Authorization")
+		if parts := strings.SplitN(header, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+			token = parts[1]
+		}
+	}
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token or ticket"})
+		return "", false
+	}
+
+	claims, err := auth.ParseToken(token, cfg.JWTSecret)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+		return "", false
+	}
+
+	// Propagate claims so downstream middleware (e.g. request logging) can read them.
+	c.Set(middleware.CtxUserID, claims.UserID)
+	c.Set(middleware.CtxIsAdmin, claims.IsAdmin)
+	return claims.UserID, true
 }
 
 func IssueWSTicket(tickets *hub.TicketStore) gin.HandlerFunc {
