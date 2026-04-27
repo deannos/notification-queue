@@ -16,6 +16,7 @@ type Config struct {
 	JWTExpiryHours         int
 	RetentionDays          int    // 0 = disabled
 	AllowedOrigins         string // comma-separated, "*" = allow all
+	TrustedProxies         string // comma-separated CIDRs/IPs; "" = trust none
 	Env                    string // "development" | "production"
 }
 
@@ -41,6 +42,7 @@ func Load() *Config {
 		JWTExpiryHours:    getIntEnv("JWT_EXPIRY_HOURS", 24),
 		RetentionDays:     getIntEnv("RETENTION_DAYS", 30),
 		AllowedOrigins:    getEnv("ALLOWED_ORIGINS", "*"),
+		TrustedProxies:    getEnv("TRUSTED_PROXIES", ""),
 		Env:               getEnv("ENV", "development"),
 	}
 }
