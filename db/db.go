@@ -2,17 +2,18 @@ package db
 
 import (
 	"fmt"
-	"log"
 
+	"github.com/deannos/notification-queue/logger"
 	"github.com/deannos/notification-queue/models"
+	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 func Open(path string) (*gorm.DB, error) {
 	database, err := gorm.Open(sqlite.Open(path), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
@@ -24,10 +25,10 @@ func Open(path string) (*gorm.DB, error) {
 		return nil, err
 	}
 	if _, err := sqlDB.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		log.Printf("warn: failed to set WAL mode: %v", err)
+		logger.L.Warn("failed to set WAL mode", zap.Error(err))
 	}
 	if _, err := sqlDB.Exec("PRAGMA foreign_keys=ON;"); err != nil {
-		log.Printf("warn: failed to enable foreign keys: %v", err)
+		logger.L.Warn("failed to enable foreign keys", zap.Error(err))
 	}
 
 	return database, nil
