@@ -19,9 +19,9 @@ type createAppRequest struct {
 }
 
 type updateAppRequest struct {
-	Name        string `json:"name"        binding:"max=100"`
-	Description string `json:"description" binding:"max=255"`
-	WebhookURL  string `json:"webhook_url" binding:"omitempty,url,max=500"`
+	Name        *string `json:"name"        binding:"omitempty,max=100"`
+	Description *string `json:"description" binding:"omitempty,max=255"`
+	WebhookURL  *string `json:"webhook_url" binding:"omitempty,url,max=500"`
 }
 
 func ListApps(apps storage.AppRepository) gin.HandlerFunc {
@@ -96,14 +96,14 @@ func UpdateApp(apps storage.AppRepository) gin.HandlerFunc {
 		}
 
 		updates := map[string]any{}
-		if req.Name != "" {
-			updates["name"] = req.Name
+		if req.Name != nil {
+			updates["name"] = *req.Name
 		}
-		if req.Description != "" {
-			updates["description"] = req.Description
+		if req.Description != nil {
+			updates["description"] = *req.Description
 		}
-		if req.WebhookURL != "" {
-			updates["webhook_url"] = req.WebhookURL
+		if req.WebhookURL != nil {
+			updates["webhook_url"] = *req.WebhookURL
 		}
 
 		if err := apps.Update(c.Request.Context(), app, updates); err != nil {
