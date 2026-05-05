@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api';
 import type { App } from '@/types';
 import { MagneticButton } from './MagneticButton';
 import { Modal } from './Modal';
+import { ConfirmDialog } from './ConfirmDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,48 +19,56 @@ const listItem = {
 };
 
 export function AppPanel() {
-  const [apps, setApps] = useState<App[]>([]);
+  const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [newToken, setNewToken] = useState('');
   const [created, setCreated] = useState(false);
-  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [rotatedToken, setRotatedToken] = useState('');
+  const [deleteAppId, setDeleteAppId] = useState<string | null>(null);
+  const [rotateTokenId, setRotateTokenId] = useState<string | null>(null);
 
-  const load = async () => {
-    try {
-      const data = await api.get<App[]>('/api/v1/application');
-      setApps(data ?? []);
-    } catch { /* ignore */ }
-  };
+  const { data: apps = [] } = useQuery({
+    queryKey: ['apps'],
+    queryFn: () => api.get<App[]>('/api/v1/application').then(d => d ?? []),
+    staleTime: 30_000,
+  });
 
-  useEffect(() => { void load(); }, []);
+  const createMut = useMutation({
+    mutationFn: () => api.post<App>('/api/v1/application', { name: name.trim(), description: desc }),
+    onSuccess: (app) => {
+      setNewToken(app.token ?? '');
+      setCreated(true);
+      void qc.invalidateQueries({ queryKey: ['apps'] });
+    },
+    onError: (err) => setFormError((err as Error).message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.del(`/api/v1/application/${id}`),
+    onMutate: (id) => {
+      qc.setQueryData<App[]>(['apps'], prev => prev?.filter(a => a.id !== id));
+    },
+    onSuccess: () => toast.success('Application deleted'),
+    onError: () => { toast.error('Failed to delete application'); void qc.invalidateQueries({ queryKey: ['apps'] }); },
+  });
+
+  const rotateMut = useMutation({
+    mutationFn: (id: string) => api.post<{ token: string }>(`/api/v1/application/${id}/token`),
+    onSuccess: (data) => setRotatedToken(data.token),
+    onError: () => toast.error('Failed to rotate token'),
+  });
 
   const openModal = () => {
-    setName(''); setDesc(''); setNewToken(''); setCreated(false); setError('');
+    setName(''); setDesc(''); setNewToken(''); setCreated(false); setFormError('');
     setShowModal(true);
   };
 
-  const createApp = async () => {
-    if (!name.trim()) { setError('Name is required'); return; }
-    try {
-      const app = await api.post<App>('/api/v1/application', { name: name.trim(), description: desc });
-      setNewToken(app.token ?? '');
-      setCreated(true);
-      void load();
-    } catch (err) { setError((err as Error).message); }
-  };
-
-  const deleteApp = async (id: string) => {
-    if (!confirm('Delete this application and all its notifications?')) return;
-    await api.del(`/api/v1/application/${id}`);
-    setApps(prev => prev.filter(a => a.id !== id));
-  };
-
-  const rotateToken = async (id: string) => {
-    if (!confirm('Rotate the token? The old token will stop working immediately.')) return;
-    const data = await api.post<{ token: string }>(`/api/v1/application/${id}/token`);
-    alert(`New token (save this — it won't be shown again):\n\n${data.token}`);
+  const handleCreate = () => {
+    if (!name.trim()) { setFormError('Name is required'); return; }
+    createMut.mutate();
   };
 
   return (
@@ -91,8 +102,8 @@ export function AppPanel() {
                     <p className="text-muted-foreground text-xs font-mono mt-0.5">ID: {a.id}</p>
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <MagneticButton variant="outline" size="sm" onClick={() => void rotateToken(a.id)}>Rotate Token</MagneticButton>
-                    <MagneticButton variant="destructive" size="sm" onClick={() => void deleteApp(a.id)}>
+                    <MagneticButton variant="outline" size="sm" onClick={() => setRotateTokenId(a.id)}>Rotate Token</MagneticButton>
+                    <MagneticButton variant="destructive" size="sm" onClick={() => setDeleteAppId(a.id)}>
                       <Trash2Icon className="w-3.5 h-3.5" />
                     </MagneticButton>
                   </div>
@@ -103,12 +114,51 @@ export function AppPanel() {
         </AnimatePresence>
       </motion.div>
 
+      <ConfirmDialog
+        open={!!deleteAppId}
+        title="Delete application?"
+        description="This will permanently delete the app and all its notifications."
+        confirmLabel="Delete"
+        onConfirm={() => { deleteMut.mutate(deleteAppId!); }}
+        onCancel={() => setDeleteAppId(null)}
+      />
+
+      <ConfirmDialog
+        open={!!rotateTokenId}
+        title="Rotate token?"
+        description="The current token will stop working immediately."
+        confirmLabel="Rotate"
+        variant="default"
+        onConfirm={() => { rotateMut.mutate(rotateTokenId!); }}
+        onCancel={() => setRotateTokenId(null)}
+      />
+
+      <Modal
+        open={!!rotatedToken}
+        title="Token Rotated"
+        onCancel={() => setRotatedToken('')}
+      >
+        <motion.div
+          className="rounded-lg border border-primary/30 bg-secondary p-4 space-y-2"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ease: [0.23, 1, 0.32, 1], duration: 0.4 }}
+        >
+          <p className="text-xs text-orange-400 font-medium">Save your new token — it won't be shown again:</p>
+          <code className="block text-xs font-mono text-emerald-400 break-all">{rotatedToken}</code>
+          <MagneticButton variant="outline" size="sm" onClick={() => {
+            void navigator.clipboard.writeText(rotatedToken);
+            toast.success('Token copied to clipboard');
+          }}>Copy</MagneticButton>
+        </motion.div>
+      </Modal>
+
       <Modal
         open={showModal}
         title="Create Application"
         onCancel={() => setShowModal(false)}
-        onConfirm={created ? undefined : () => void createApp()}
-        confirmDisabled={created}
+        onConfirm={created ? undefined : handleCreate}
+        confirmDisabled={created || createMut.isPending}
       >
         {!created ? (
           <div className="space-y-3">
@@ -120,7 +170,7 @@ export function AppPanel() {
               <Label>Description</Label>
               <Input placeholder="What sends notifications here?" value={desc} onChange={e => setDesc(e.target.value)} />
             </div>
-            {error && <p className="text-destructive text-xs">{error}</p>}
+            {formError && <p className="text-destructive text-xs">{formError}</p>}
           </div>
         ) : (
           <motion.div
