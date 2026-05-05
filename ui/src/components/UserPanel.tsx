@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api';
 import type { User } from '@/types';
 import { MagneticButton } from './MagneticButton';
 import { Modal } from './Modal';
+import { ConfirmDialog } from './ConfirmDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,42 +19,48 @@ const listItem = {
 };
 
 export function UserPanel() {
-  const [users, setUsers] = useState<User[]>([]);
+  const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
-  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
 
-  const load = async () => {
-    try {
-      const data = await api.get<User[]>('/api/v1/user');
-      setUsers(data ?? []);
-    } catch { /* ignore */ }
-  };
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api.get<User[]>('/api/v1/user').then(d => d ?? []),
+  });
 
-  useEffect(() => { void load(); }, []);
-
-  const createUser = async () => {
-    setError('');
-    try {
-      await api.post('/api/v1/user', { username, password, is_admin: isAdmin });
+  const createMut = useMutation({
+    mutationFn: () => api.post('/api/v1/user', { username, password, is_admin: isAdmin }),
+    onSuccess: () => {
       setShowModal(false);
-      void load();
-    } catch (err) { setError((err as Error).message); }
-  };
+      toast.success(`User "${username}" created`);
+      void qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (err) => setFormError((err as Error).message),
+  });
 
-  const deleteUser = async (id: string) => {
-    if (!confirm('Delete this user and all their data?')) return;
-    await api.del(`/api/v1/user/${id}`);
-    setUsers(prev => prev.filter(u => u.id !== id));
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.del(`/api/v1/user/${id}`),
+    onMutate: (id) => {
+      qc.setQueryData<User[]>(['users'], prev => prev?.filter(u => u.id !== id));
+    },
+    onSuccess: () => toast.success('User deleted'),
+    onError: () => { toast.error('Failed to delete user'); void qc.invalidateQueries({ queryKey: ['users'] }); },
+  });
+
+  const openModal = () => {
+    setUsername(''); setPassword(''); setIsAdmin(false); setFormError('');
+    setShowModal(true);
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold tracking-tight">Users</h2>
-        <MagneticButton size="sm" onClick={() => { setUsername(''); setPassword(''); setIsAdmin(false); setError(''); setShowModal(true); }}>+ New User</MagneticButton>
+        <MagneticButton size="sm" onClick={openModal}>+ New User</MagneticButton>
       </div>
 
       {users.length === 0 && <p className="text-center py-10 text-muted-foreground">No users.</p>}
@@ -71,10 +80,13 @@ export function UserPanel() {
                     <UserCircleIcon className="w-4 h-4 text-primary" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-sm flex items-center gap-1.5">{u.username} {u.is_admin && <span className="bg-primary/10 text-primary text-[10px] font-medium px-2 py-0.5 rounded-full">admin</span>}</p>
+                    <p className="font-semibold text-sm flex items-center gap-1.5">
+                      {u.username}
+                      {u.is_admin && <span className="bg-primary/10 text-primary text-[10px] font-medium px-2 py-0.5 rounded-full">admin</span>}
+                    </p>
                     <p className="text-xs text-muted-foreground">Created: {new Date(u.created_at).toLocaleDateString()}</p>
                   </div>
-                  <MagneticButton variant="destructive" size="sm" onClick={() => void deleteUser(u.id)}>
+                  <MagneticButton variant="destructive" size="sm" onClick={() => setDeleteUserId(u.id)}>
                     <Trash2Icon className="w-3.5 h-3.5" />
                   </MagneticButton>
                 </CardContent>
@@ -84,11 +96,21 @@ export function UserPanel() {
         </AnimatePresence>
       </motion.div>
 
+      <ConfirmDialog
+        open={!!deleteUserId}
+        title="Delete user?"
+        description="This will permanently delete the user and all their data."
+        confirmLabel="Delete"
+        onConfirm={() => { deleteMut.mutate(deleteUserId!); }}
+        onCancel={() => setDeleteUserId(null)}
+      />
+
       <Modal
         open={showModal}
         title="Create User"
         onCancel={() => setShowModal(false)}
-        onConfirm={() => void createUser()}
+        onConfirm={() => createMut.mutate()}
+        confirmDisabled={createMut.isPending}
       >
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -103,7 +125,7 @@ export function UserPanel() {
             <input type="checkbox" checked={isAdmin} onChange={e => setIsAdmin(e.target.checked)} className="rounded" />
             Admin
           </label>
-          {error && <p className="text-destructive text-xs">{error}</p>}
+          {formError && <p className="text-destructive text-xs">{formError}</p>}
         </div>
       </Modal>
     </div>
