@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -8,9 +8,10 @@ import type { Notification } from '@/types';
 import { NotificationPanel } from './NotificationPanel';
 import { AppPanel } from './AppPanel';
 import { UserPanel } from './UserPanel';
+import { CommandPalette } from './CommandPalette';
 import { MagneticButton } from './MagneticButton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { SunIcon, MoonIcon } from 'lucide-react';
+import { SunIcon, MoonIcon, SearchIcon } from 'lucide-react';
 
 type Panel = 'notifications' | 'apps' | 'users';
 
@@ -37,6 +38,18 @@ export function Dashboard() {
   const { theme, toggle: toggleTheme } = useTheme();
   const [panel, setPanel] = useState<Panel>('notifications');
   const [liveNotif, setLiveNotif] = useState<Notification | null>(null);
+  const [cmdOpen, setCmdOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCmdOpen(o => !o);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
 
   const handleIncoming = useCallback((n: Notification) => setLiveNotif(n), []);
   const wsStatus = useWebSocket(token, handleIncoming);
@@ -92,6 +105,15 @@ export function Dashboard() {
 
           {/* Right controls */}
           <div className="ml-auto flex items-center gap-4">
+            <button
+              onClick={() => setCmdOpen(true)}
+              className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border bg-secondary text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              title="Open command palette"
+            >
+              <SearchIcon className="w-3 h-3" />
+              <span>Search</span>
+              <kbd className="ml-1 text-[10px] bg-background px-1 rounded">⌘K</kbd>
+            </button>
 
             {/* Health */}
             <Tooltip>
@@ -150,6 +172,16 @@ export function Dashboard() {
             </MagneticButton>
           </div>
         </header>
+
+        <CommandPalette
+          open={cmdOpen}
+          onClose={() => setCmdOpen(false)}
+          isAdmin={!!user?.is_admin}
+          theme={theme}
+          onNavigate={p => setPanel(p)}
+          onToggleTheme={toggleTheme}
+          onLogout={logout}
+        />
 
         {/* ── Main content ── */}
         <main className="flex-1 overflow-y-auto">
