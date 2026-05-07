@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api';
 import type { App, Notification } from '@/types';
+import { useDebounce } from '@/hooks/useDebounce';
 import { MagneticButton } from './MagneticButton';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { CheckIcon, Trash2Icon, SearchIcon, XIcon } from 'lucide-react';
+import { CheckIcon, Trash2Icon, SearchIcon, XIcon, BellIcon } from 'lucide-react';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 const LIMIT = 20;
@@ -35,24 +36,25 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
   const qc = useQueryClient();
   const [offset, setOffset] = useState(0);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 350);
   const [filterApp, setFilterApp] = useState('');
   const [filterRead, setFilterRead] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
-  const notifKey = ['notifications', offset, search, filterApp, filterRead, filterPriority] as const;
+  const notifKey = ['notifications', offset, debouncedSearch, filterApp, filterRead, filterPriority] as const;
 
   const buildUrl = (off: number) => {
     const p = new URLSearchParams({ limit: String(LIMIT), offset: String(off) });
-    if (search)         p.set('q', search);
-    if (filterApp)      p.set('app_id', filterApp);
-    if (filterRead)     p.set('read', filterRead);
-    if (filterPriority) p.set('priority', filterPriority);
+    if (debouncedSearch) p.set('q', debouncedSearch);
+    if (filterApp)       p.set('app_id', filterApp);
+    if (filterRead)      p.set('read', filterRead);
+    if (filterPriority)  p.set('priority', filterPriority);
     return `/api/v1/notification?${p.toString()}`;
   };
 
-  // Reset to page 1 whenever filters change
-  useEffect(() => { setOffset(0); }, [search, filterApp, filterRead, filterPriority]);
+  // Reset to page 1 when debounced filters change
+  useEffect(() => { setOffset(0); }, [debouncedSearch, filterApp, filterRead, filterPriority]);
 
   const { data: appsData } = useQuery({
     queryKey: ['apps'],
@@ -76,10 +78,10 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
         ? { notifications: [liveNotif, ...prev.notifications], total: prev.total + 1 }
         : { notifications: [liveNotif], total: 1 }
     );
+    void qc.invalidateQueries({ queryKey: ['unread-count'] });
     onLiveConsumed();
-  // notifKey is derived from state values captured at render; explicit deps below keep it fresh
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveNotif, qc, onLiveConsumed, offset, search, filterApp, filterRead, filterPriority]);
+  }, [liveNotif, qc, onLiveConsumed, offset, debouncedSearch, filterApp, filterRead, filterPriority]);
 
   const markReadMut = useMutation({
     mutationFn: (id: string) => api.put(`/api/v1/notification/${id}/read`),
@@ -88,6 +90,7 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
         prev ? { ...prev, notifications: prev.notifications.map(n => n.id === id ? { ...n, read: true } : n) } : prev
       );
     },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['unread-count'] }),
     onError: () => toast.error('Failed to mark as read'),
   });
 
@@ -98,7 +101,10 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
         prev ? { notifications: prev.notifications.filter(n => n.id !== id), total: Math.max(0, prev.total - 1) } : prev
       );
     },
-    onSuccess: () => toast.success('Notification deleted'),
+    onSuccess: () => {
+      toast.success('Notification deleted');
+      void qc.invalidateQueries({ queryKey: ['unread-count'] });
+    },
     onError: () => { toast.error('Failed to delete notification'); void qc.invalidateQueries({ queryKey: notifKey }); },
   });
 
@@ -110,7 +116,10 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
         prev ? { ...prev, notifications: prev.notifications.map(n => set.has(n.id) ? { ...n, read: true } : n) } : prev
       );
     },
-    onSuccess: (_, ids) => toast.success(`Marked ${ids.length} notification${ids.length > 1 ? 's' : ''} as read`),
+    onSuccess: (_, ids) => {
+      toast.success(`Marked ${ids.length} notification${ids.length > 1 ? 's' : ''} as read`);
+      void qc.invalidateQueries({ queryKey: ['unread-count'] });
+    },
     onError: () => toast.error('Failed to mark all as read'),
   });
 
@@ -118,6 +127,7 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
     mutationFn: () => api.del('/api/v1/notification'),
     onSuccess: () => {
       qc.setQueryData<NotifPage>(notifKey, { notifications: [], total: 0 });
+      qc.setQueryData(['unread-count'], { notifications: [], total: 0 });
       setOffset(0);
       toast.success('All notifications deleted');
     },
@@ -126,7 +136,7 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
 
   const unreadIds = notifs.filter(n => !n.read).map(n => n.id);
   const clearFilters = () => { setSearch(''); setFilterApp(''); setFilterRead(''); setFilterPriority(''); };
-  const hasFilters = search || filterApp || filterRead || filterPriority;
+  const hasFilters = debouncedSearch || filterApp || filterRead || filterPriority;
   const pages = Math.ceil(total / LIMIT);
   const currentPage = Math.floor(offset / LIMIT) + 1;
   const unreadCount = notifs.filter(n => !n.read).length;
@@ -224,14 +234,30 @@ export function NotificationPanel({ liveNotif, onLiveConsumed }: Props) {
             ))}
           </div>
         )}
+
         {!isLoading && notifs.length === 0 && (
-          <motion.p className="text-center py-16 text-muted-foreground text-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            {hasFilters ? 'No notifications match your filters.' : 'No notifications yet.'}
-          </motion.p>
+          <motion.div
+            className="flex flex-col items-center py-20 gap-3 text-muted-foreground"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          >
+            <BellIcon className="w-10 h-10 opacity-20" />
+            <div className="text-center">
+              <p className="text-sm font-medium">{hasFilters ? 'No matches' : 'All caught up'}</p>
+              <p className="text-xs mt-1 text-muted-foreground/70">
+                {hasFilters ? 'Try adjusting your filters.' : 'New notifications will appear here.'}
+              </p>
+            </div>
+            {hasFilters && (
+              <button onClick={clearFilters} className="text-xs text-primary hover:underline">
+                Clear filters
+              </button>
+            )}
+          </motion.div>
         )}
+
         <motion.div
           className="space-y-2 pr-3"
-          key={`${offset}-${search}-${filterApp}-${filterRead}-${filterPriority}`}
+          key={`${offset}-${debouncedSearch}-${filterApp}-${filterRead}-${filterPriority}`}
           initial="hidden"
           animate="show"
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
