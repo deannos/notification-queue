@@ -1,4 +1,4 @@
-import { useMotionValue, useSpring } from 'framer-motion';
+import { useMotionValue, useSpring } from 'motion/react';
 import type { MouseEvent } from 'react';
 
 export function useAntiGravity(strength = 8) {
