@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api';
@@ -10,7 +10,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UserCircleIcon, Trash2Icon } from 'lucide-react';
+import { UserCircleIcon, Trash2Icon, UsersIcon } from 'lucide-react';
 
 const listItem = {
   hidden: { opacity: 0, y: 18 },
@@ -27,7 +27,7 @@ export function UserPanel() {
   const [formError, setFormError] = useState('');
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
 
-  const { data: users = [] } = useQuery({
+  const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: () => api.get<User[]>('/api/v1/user').then(d => d ?? []),
   });
@@ -63,7 +63,29 @@ export function UserPanel() {
         <MagneticButton size="sm" onClick={openModal}>+ New User</MagneticButton>
       </div>
 
-      {users.length === 0 && <p className="text-center py-10 text-muted-foreground">No users.</p>}
+      {/* Loading skeletons */}
+      {isLoading && (
+        <div className="space-y-2.5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-[72px] rounded-lg bg-card animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!isLoading && users.length === 0 && (
+        <motion.div
+          className="flex flex-col items-center py-20 gap-3 text-muted-foreground"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        >
+          <UsersIcon className="w-10 h-10 opacity-20" />
+          <div className="text-center">
+            <p className="text-sm font-medium">No users yet</p>
+            <p className="text-xs mt-1 text-muted-foreground/70">Add a user to manage access.</p>
+          </div>
+          <MagneticButton size="sm" onClick={openModal}>+ New User</MagneticButton>
+        </motion.div>
+      )}
 
       <motion.div
         className="space-y-2.5"
