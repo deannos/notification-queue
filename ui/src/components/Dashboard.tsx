@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useHealthCheck, type HealthStatus } from '@/hooks/useHealthCheck';
+import { api } from '@/api';
 import type { Notification } from '@/types';
 import { NotificationPanel } from './NotificationPanel';
 import { AppPanel } from './AppPanel';
@@ -25,12 +27,6 @@ const healthMeta: Record<HealthStatus, { label: string; dot: string }> = {
   ok:       { label: 'Server healthy',            dot: 'bg-emerald-500' },
   degraded: { label: 'Degraded — DB unavailable', dot: 'bg-red-500'     },
   unknown:  { label: 'Checking…',                 dot: 'bg-zinc-500'    },
-};
-
-const navLabels: Record<Panel, string> = {
-  notifications: 'Notifications',
-  apps: 'Applications',
-  users: 'Users',
 };
 
 export function Dashboard() {
@@ -55,11 +51,33 @@ export function Dashboard() {
   const wsStatus = useWebSocket(token, handleIncoming);
   const health   = useHealthCheck();
 
+  const { data: unreadData } = useQuery({
+    queryKey: ['unread-count'],
+    queryFn: () => api.get<{ notifications: []; total: number }>('/api/v1/notification?read=false&limit=1'),
+    staleTime: 15_000,
+    refetchInterval: 60_000,
+  });
+  const unreadCount = unreadData?.total ?? 0;
+
   const navItems: Panel[] = [
     'notifications',
     'apps',
     ...(user?.is_admin ? ['users' as Panel] : []),
   ];
+
+  const navLabel = (id: Panel) => {
+    if (id === 'notifications') return (
+      <span className="flex items-center gap-1.5">
+        Notifications
+        {unreadCount > 0 && (
+          <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[10px] font-bold bg-primary text-primary-foreground">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </span>
+    );
+    return <>{id === 'apps' ? 'Applications' : 'Users'}</>;
+  };
 
   return (
     <TooltipProvider>
@@ -98,7 +116,7 @@ export function Dashboard() {
                     transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                   />
                 )}
-                <span className="relative z-10">{navLabels[id]}</span>
+                <span className="relative z-10">{navLabel(id)}</span>
               </motion.button>
             ))}
           </nav>
